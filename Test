@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>PUCK.js Temperatur Dashboard</title>
+  https://cdn.jsdelivr.net/npm/chart.js
+  <style>
+    body { font-family: sans-serif; padding: 2em; }
+    #temperature { font-size: 2em; margin-top: 1em; }
+    canvas { max-width: 600px; margin-top: 2em; }
+  </style>
+</head>
+<body>
+  <h1>PUCK.js Temperatur Dashboard</h1>
+  <button onclick="connect()">Mit PUCK.js verbinden</button>
+  <div id="temperature">Temperatur: -- °C</div>
+  <canvas id="chart"></canvas>
+
+  <script>
+    let chart;
+    let data = [];
+
+    async function connect() {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: ['health_thermometer'] }]
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('health_thermometer');
+        const characteristic = await service.getCharacteristic('temperature_measurement');
+
+        characteristic.startNotifications();
+        characteristic.addEventListener('characteristicvaluechanged', event => {
+          const value = event.target.value;
+          const temp = value.getInt8(1); // Temperatur auslesen
+          const now = new Date().toLocaleTimeString();
+
+          document.getElementById('temperature').textContent = `Temperatur: ${temp} °C`;
+
+          data.push({ x: now, y: temp });
+          if (data.length > 20) data.shift();
+          chart.update();
+        });
+
+        initChart();
+      } catch (err) {
+        alert("Verbindung fehlgeschlagen: " + err);
+      }
+    }
+
+    function initChart() {
+      const ctx = document.getElementById('chart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: 'Temperaturverlauf (°C)',
+            data: data,
+            borderColor: 'red',
+            fill: false
+          }]
+        },
+        options: {
+          scales: {
+            x: { type: 'category', title: { display: true, text: 'Zeit' } },
+            y: { title: { display: true, text: 'Temperatur (°C)' } }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
