@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Puck.js Temperature Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 2em; }
+    #temp { font-size: 2em; margin: 1em 0; }
+    #connect { font-size: 1.2em; }
+    #status { color: green; }
+  </style>
+</head>
+<body>
+  <h1>Puck.js Temperature Dashboard</h1>
+  <button id="connect">Connect to Puck.js</button>
+  <div id="status"></div>
+  <div id="temp">Temperature: -- °C</div>
+  <canvas id="tempChart" width="600" height="300"></canvas>
+  <script>
+    const tempDisplay = document.getElementById('temp');
+    const statusDisplay = document.getElementById('status');
+    const ctx = document.getElementById('tempChart').getContext('2d');
+    const tempChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Temperature (°C)',
+          data: [],
+          borderColor: 'rgb(255, 99, 132)',
+          tension: 0.1
+        }]
+      },
+      options: {
+        scales: {
+          x: { title: { display: true, text: 'Time' }},
+          y: { title: { display: true, text: '°C' }, min: 0, max: 50 }
+        }
+      }
+    });
+
+    document.getElementById('connect').onclick = async function() {
+      statusDisplay.textContent = "Scanning for Puck.js...";
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: 'Puck.js' }],
+          optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+        });
+        statusDisplay.textContent = "Connecting...";
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+        const characteristic = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+        await characteristic.startNotifications();
+        statusDisplay.textContent = "Connected!";
+        characteristic.addEventListener('characteristicvaluechanged', event => {
+          const value = new TextDecoder().decode(event.target.value).trim();
+          if (!isNaN(value)) {
+            const temp = parseFloat(value);
+            tempDisplay.textContent = `Temperature: ${temp.toFixed(2)} °C`;
+            const now = new Date().toLocaleTimeString();
+            tempChart.data.labels.push(now);
+            tempChart.data.datasets[0].data.push(temp);
+            if (tempChart.data.labels.length > 30) { // Show last 30 readings
+              tempChart.data.labels.shift();
+              tempChart.data.datasets[0].data.shift();
+            }
+            tempChart.update();
+          }
+        });
+      } catch (e) {
+        statusDisplay.textContent = "Connection failed: " + e;
+      }
+    };
+  </script>
+</body>
+</html>
