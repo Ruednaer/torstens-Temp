@@ -1,0 +1,93 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>PUCK.js Temperatur Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 30px;
+      background-color: #f0f0f0;
+    }
+    #temperature {
+      font-size: 2em;
+      margin: 20px 0;
+    }
+    canvas {
+      max-width: 600px;
+      margin: auto;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+    }
+  </style>
+</head>
+<body>
+  <h1>PUCK.js Temperatur Dashboard</h1>
+  <button onclick="connect()">Mit PUCK.js verbinden</button>
+  <div id="temperature">Temperatur: -- °C</div>
+  <canvas id="tempChart"></canvas>
+
+  <script>
+    let tempData = [];
+    let timeLabels = [];
+    const ctx = document.getElementById('tempChart').getContext('2d');
+    const tempChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: timeLabels,
+        datasets: [{
+          label: 'Temperatur (°C)',
+          data: tempData,
+          borderColor: 'rgba(255, 99, 132, 1)',
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          fill: true,
+          tension: 0.1
+        }]
+      },
+      options: {
+        scales: {
+          x: { title: { display: true, text: 'Zeit' }},
+          y: { title: { display: true, text: 'Temperatur (°C)' }, suggestedMin: 0, suggestedMax: 40 }
+        }
+      }
+    });
+
+    async function connect() {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: ['health_thermometer'] }]
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('health_thermometer');
+        const characteristic = await service.getCharacteristic('temperature_measurement');
+
+        characteristic.startNotifications();
+        characteristic.addEventListener('characteristicvaluechanged', event => {
+          const value = event.target.value;
+          const temp = value.getInt8(1); // Beispiel: Temperatur auslesen
+          const now = new Date().toLocaleTimeString();
+
+          document.getElementById('temperature').textContent = `Temperatur: ${temp} °C`;
+
+          tempData.push(temp);
+          timeLabels.push(now);
+          if (tempData.length > 20) {
+            tempData.shift();
+            timeLabels.shift();
+          }
+          tempChart.update();
+        });
+      } catch (error) {
+        console.error('Verbindungsfehler:', error);
+        alert('Verbindung fehlgeschlagen. Stelle sicher, dass dein PUCK.js aktiv ist.');
+      }
+    }
+  </script>
+</body>
+</html>
